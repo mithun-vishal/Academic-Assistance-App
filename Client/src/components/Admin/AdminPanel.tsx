@@ -3,7 +3,7 @@ import {
   Users, 
   Settings, 
   Shield, 
-  Megaphone, 
+  Megaphone,  
   Database,
   FileCheck,
   UserPlus,

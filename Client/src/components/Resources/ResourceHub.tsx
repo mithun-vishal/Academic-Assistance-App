@@ -3,12 +3,15 @@ import { Search, Filter, Download, Eye, Upload, Tag } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Resource } from '../../types';
 import { format } from 'date-fns';
+import { useEffect } from 'react';
+
 
 export const ResourceHub: React.FC = () => {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
+  const [resources, setResources] = useState<Resource[]>([]); // <-- FIXED: add resources state
 
   // Mock data
   const mockResources: Resource[] = [
@@ -55,6 +58,12 @@ export const ResourceHub: React.FC = () => {
       fileSize: 5120000
     }
   ];
+  
+  useEffect(() => {
+  fetch('http://localhost:5000/api/resources')
+    .then(res => res.json())
+    .then(setResources);   
+}, []);
 
   const subjects = ['all', 'Computer Science', 'Mathematics', 'Physics', 'Chemistry'];
   const resourceTypes = ['all', 'pdf', 'video', 'presentation', 'article', 'image'];
@@ -210,4 +219,5 @@ export const ResourceHub: React.FC = () => {
       )}
     </div>
   );
+
 };
