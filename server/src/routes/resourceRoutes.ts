@@ -9,3 +9,7 @@ router.put('/:id', updateResource);
 router.delete('/:id', deleteResource);
 
 export default router;
+
+
+//nigga raj
+//sotta simon
