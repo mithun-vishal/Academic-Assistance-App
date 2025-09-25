@@ -13,7 +13,7 @@ export const LoginForm: React.FC = () => {
     { email: 'arjun.student@sns.edu', role: 'Student', name: 'Arjun Kumar' },
     { email: 'priya.teacher@sns.edu', role: 'Teacher', name: 'Dr. Priya Sharma' },
     { email: 'admin@sns.edu', role: 'Admin', name: 'Admin User' },
-    { email: 'owner@sns.edu', role: 'Owner', name: 'College Owner' }
+    //{ email: 'owner@sns.edu', role: 'Owner', name: 'College Owner' }
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {

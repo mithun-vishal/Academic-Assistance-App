@@ -50,6 +50,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               alt={user?.name}
               className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
             />
+            
+            {/* logout button */}
+            <button
+            onClick={logout}
+            className="ml-2 px-3 py-1 rounded bg-red-500 text-white text-sm hover:bg-red-600 transition"
+            title="Logout">Logout</button>
           </div>
         </div>
       </div>

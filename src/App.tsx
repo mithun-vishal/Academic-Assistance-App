@@ -12,12 +12,14 @@ import { AnalyticsDashboard } from './components/Analytics/AnalyticsDashboard';
 import { AdminPanel } from './components/Admin/AdminPanel';
 
 const Dashboard: React.FC = () => {
-  const { user } = useAuth();
+  // const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('chat');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'login':
+        return <LoginForm/>;
       case 'chat':
         return <ChatInterface />;
       case 'tests':
@@ -33,7 +35,7 @@ const Dashboard: React.FC = () => {
       case 'users':
         return <AdminPanel />;
       default:
-        return <ChatInterface />;
+        return <LoginForm />;
     }
   };
 
