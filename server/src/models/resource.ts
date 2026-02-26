@@ -1,21 +1,27 @@
-import { Schema, model, Document } from 'mongoose';
+import mongoose, { Schema, Document } from "mongoose";
 
-interface IResource extends Document {
+export interface IResource extends Document {
   title: string;
-  description: string;
-  type: 'pdf' | 'video' | 'article' | 'image' | 'presentation';
+  description: string;      
   subject: string;
-  uploadedBy: string;
-  uploadedAt: Date;
+  fileUrl: string;
+  uploadedBy: mongoose.Types.ObjectId;
+  status: "pending" | "approved" | "rejected";
+  createdAt: Date;
 }
 
 const resourceSchema = new Schema<IResource>({
   title: { type: String, required: true },
-  description: String,
-  type: { type: String, enum: ['pdf','video','article','image','presentation'], required: true },
-  subject: String,
-  uploadedBy: String,
-  uploadedAt: { type: Date, default: Date.now }
+  description: { type: String },
+  subject: { type: String, required: true },
+  fileUrl: { type: String, required: true },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  status: {
+    type: String,
+    enum: ["pending", "approved", "rejected"],
+    default: "pending"
+  },
+  createdAt: { type: Date, default: Date.now }
 });
 
-export default model<IResource>('Resource', resourceSchema);
+export default mongoose.model<IResource>("Resource", resourceSchema);

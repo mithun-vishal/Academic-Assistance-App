@@ -3,6 +3,11 @@ import { Send, Paperclip, Mic, Bot, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ChatMessage } from '../../types';
 import { format } from 'date-fns';
+import axiosInstance from '../../Axios/axiosInstance';
+
+console.log("🔥 THIS IS THE NEW CHAT FILE 🔥");
+console.log("NOW IT IS CORRECT");
+
 
 export const ChatInterface: React.FC = () => {
   const { user } = useAuth();
@@ -19,64 +24,59 @@ export const ChatInterface: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    // Welcome message based on role
-    const welcomeMessage: ChatMessage = {
-      id: '1',
-      content: user?.role === 'student' 
-        ? "Hi! I'm your AI study assistant. I can help you with your doubts, provide explanations, and guide you through your coursework. What would you like to learn about today?"
-        : "Hello! I'm your AI teaching assistant. I can help you create lesson plans, generate quiz questions, analyze student performance, and provide educational resources. How can I assist you today?",
+  // useEffect(() => {
+  //   // Welcome message based on role
+  //   const welcomeMessage: ChatMessage = {
+  //     id: '1',
+  //     content: user?.role === 'student' 
+  //       ? "Hi! I'm your AI study assistant. I can help you with your doubts, provide explanations, and guide you through your coursework. What would you like to learn about today?"
+  //       : "Hello! I'm your AI teaching assistant. I can help you create lesson plans, generate quiz questions, analyze student performance, and provide educational resources. How can I assist you today?",
+  //     sender: 'assistant',
+  //     timestamp: new Date(),
+  //   };
+  //   setMessages([welcomeMessage]);
+  // }, [user?.role]);
+
+  const handleSendMessage = async () => {
+  if (!inputMessage.trim()) return;
+
+  const userMessage: ChatMessage = {
+    id: Date.now().toString(),
+    content: inputMessage,
+    sender: 'user',
+    timestamp: new Date(),
+  };
+
+  setMessages(prev => [...prev, userMessage]);
+  setInputMessage('');
+  setIsTyping(true);
+
+  try {
+    const response = await axiosInstance.post('/ai/ask', {
+      question: inputMessage,
+    });
+
+    const aiResponse: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      content: response.data.answer,
       sender: 'assistant',
       timestamp: new Date(),
     };
-    setMessages([welcomeMessage]);
-  }, [user?.role]);
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      content: inputMessage,
-      sender: 'user',
+    setMessages(prev => [...prev, aiResponse]);
+  } catch (error) {
+    const errorMessage: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      content: "AI failed to respond. Please try again.",
+      sender: 'assistant',
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInputMessage('');
-    setIsTyping(true);
+    setMessages(prev => [...prev, errorMessage]);
+  }
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: generateAIResponse(inputMessage, user?.role || 'student'),
-        sender: 'assistant',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, aiResponse]);
-      setIsTyping(false);
-    }, 1500);
-  };
-
-  const generateAIResponse = (message: string, role: string): string => {
-    const studentResponses = [
-      "That's a great question! Let me break it down for you step by step...",
-      "I understand you're having trouble with this concept. Here's a simple explanation...",
-      "Let me provide you with some examples to make this clearer...",
-      "This is a common doubt among students. Here's how you can approach it...",
-    ];
-
-    const teacherResponses = [
-      "Here are some effective teaching strategies for this topic...",
-      "I can help you create assessment questions for this subject...",
-      "Based on student performance data, I recommend focusing on...",
-      "Here are some resources that might be helpful for your lesson plan...",
-    ];
-
-    const responses = role === 'student' ? studentResponses : teacherResponses;
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
+  setIsTyping(false);
+};
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -94,7 +94,8 @@ export const ChatInterface: React.FC = () => {
             <Bot className="h-7 w-7 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900 text-lg">
+           <h3 className="text-red-600 text-3xl">
+               NEW AI SYSTEM ACTIVE
               {user?.role === 'student' ? 'Study Assistant' : 'Teaching Assistant'}
             </h3>
             <p className="text-sm text-green-600 flex items-center">
