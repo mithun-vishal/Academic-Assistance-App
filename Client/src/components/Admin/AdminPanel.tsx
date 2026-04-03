@@ -1,21 +1,93 @@
-import React, { useState } from 'react';
-import { 
-  Users, 
-  Settings, 
-  Shield, 
-  Megaphone,  
-  Database,
-  FileCheck,
-  UserPlus,
-  AlertCircle
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Settings, Megaphone, AlertCircle, CheckCircle2, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import axiosInstance from '../../Axios/axiosInstance';
+import { format } from 'date-fns';
 
-export const AdminPanel: React.FC = () => {
+type Role = 'student' | 'teacher' | 'admin';
+
+interface AppUser {
+  _id: string;
+  name: string;
+  email: string;
+  role: Role;
+  createdAt?: string;
+}
+
+const ROLE_STYLES: Record<Role, string> = {
+  admin: 'bg-purple-100 text-purple-800',
+  teacher: 'bg-green-100 text-green-800',
+  student: 'bg-blue-100 text-blue-800',
+};
+
+interface AdminPanelProps {
+  initialSection?: 'users' | 'announcements' | 'system';
+}
+
+export const AdminPanel: React.FC<AdminPanelProps> = ({ initialSection = 'users' }) => {
   const { user } = useAuth();
-  const [activeSection, setActiveSection] = useState('users');
+  const [activeSection, setActiveSection] = useState(initialSection);
+  const [usersList, setUsersList] = useState<AppUser[]>([]);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
-  if (user?.role !== 'admin' && user?.role !== 'owner') {
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementBody, setAnnouncementBody] = useState('');
+  const [isSubmittingAnnouncement, setIsSubmittingAnnouncement] = useState(false);
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      fetchUsers();
+    }
+  }, [user]);
+
+  const fetchUsers = () => {
+    axiosInstance.get('/auth/users')
+      .then(res => setUsersList(res.data))
+      .catch(err => console.error('Failed fetching users', err));
+  };
+
+  const showToast = (msg: string, type: 'success' | 'error') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleRoleChange = async (userId: string, newRole: Role) => {
+    setUpdatingId(userId);
+    try {
+      await axiosInstance.patch(`/auth/users/${userId}/role`, { role: newRole });
+      setUsersList(prev =>
+        prev.map(u => u._id === userId ? { ...u, role: newRole } : u)
+      );
+      showToast('Role updated successfully!', 'success');
+    } catch {
+      showToast('Failed to update role. Try again.', 'error');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!announcementTitle.trim() || !announcementBody.trim()) return;
+    
+    setIsSubmittingAnnouncement(true);
+    try {
+      await axiosInstance.post('/notifications/announce', {
+        title: announcementTitle,
+        message: announcementBody
+      });
+      showToast('Announcement sent to all users!', 'success');
+      setAnnouncementTitle('');
+      setAnnouncementBody('');
+    } catch (err) {
+      showToast('Failed to send announcement.', 'error');
+    } finally {
+      setIsSubmittingAnnouncement(false);
+    }
+  };
+
+  if (user?.role !== 'admin') {
     return (
       <div className="p-6 text-center">
         <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
@@ -28,79 +100,87 @@ export const AdminPanel: React.FC = () => {
   const adminSections = [
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'announcements', label: 'Announcements', icon: Megaphone },
-    { id: 'resources', label: 'Resource Approval', icon: FileCheck },
-    { id: 'security', label: 'Security Settings', icon: Shield },
     { id: 'system', label: 'System Settings', icon: Settings },
-    { id: 'database', label: 'Database Management', icon: Database }
-  ];
-
-  const mockUsers = [
-    { id: '1', name: 'Arjun Kumar', email: 'arjun@sns.edu', role: 'student', status: 'active', lastLogin: '2 hours ago' },
-    { id: '2', name: 'Dr. Priya Sharma', email: 'priya@sns.edu', role: 'teacher', status: 'active', lastLogin: '1 hour ago' },
-    { id: '3', name: 'Rajesh Patel', email: 'rajesh@sns.edu', role: 'student', status: 'inactive', lastLogin: '2 days ago' },
-    { id: '4', name: 'Anita Singh', email: 'anita@sns.edu', role: 'teacher', status: 'active', lastLogin: '30 minutes ago' }
   ];
 
   const renderUserManagement = () => (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">User Management</h3>
-        <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
-          <UserPlus className="h-4 w-4" />
-          <span>Add User</span>
-        </button>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">User Management</h3>
+          <p className="text-sm text-gray-500 mt-0.5">Change any user's role using the dropdown.</p>
+        </div>
+        <span className="text-sm text-gray-500">{usersList.length} users</span>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Current Role</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Change Role</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {mockUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
+            <tbody className="bg-white divide-y divide-gray-100">
+              {usersList.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-10 text-center text-gray-400 text-sm">Loading users...</td>
+                </tr>
+              )}
+              {usersList.map((usr) => (
+                <tr key={usr._id} className="hover:bg-gray-50 transition-colors">
+                  {/* User info */}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium text-blue-600">
-                          {user.name.split(' ').map(n => n[0]).join('')}
-                        </span>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white ${usr.role === 'admin' ? 'bg-purple-500' : usr.role === 'teacher' ? 'bg-green-500' : 'bg-blue-500'}`}>
+                        {usr.name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{usr.name}</p>
+                        <p className="text-xs text-gray-500">{usr.email}</p>
                       </div>
                     </div>
                   </td>
+
+                  {/* Current role badge */}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                      user.role === 'teacher' ? 'bg-green-100 text-green-800' :
-                      'bg-blue-100 text-blue-800'
-                    }`}>
-                      {user.role}
+                    <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full capitalize ${ROLE_STYLES[usr.role]}`}>
+                      {usr.role}
                     </span>
                   </td>
+
+                  {/* Role change dropdown */}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {user.status}
-                    </span>
+                    {usr._id === user?.id ? (
+                      <span className="text-xs text-gray-400 italic">You (cannot change)</span>
+                    ) : (
+                      <div className="relative inline-block">
+                        <select
+                          value={usr.role}
+                          disabled={updatingId === usr._id}
+                          onChange={(e) => handleRoleChange(usr._id, e.target.value as Role)}
+                          className="appearance-none pl-3 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="student">Student</option>
+                          <option value="teacher">Teacher</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-2 h-4 w-4 text-gray-400 pointer-events-none" />
+                        {updatingId === usr._id && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-lg">
+                            <div className="h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </td>
+
+                  {/* Joined date */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.lastLogin}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    <button className="text-blue-600 hover:text-blue-900">Edit</button>
-                    <button className="text-red-600 hover:text-red-900">Disable</button>
+                    {usr.createdAt ? format(new Date(usr.createdAt), 'MMM d, yyyy') : 'N/A'}
                   </td>
                 </tr>
               ))}
@@ -112,197 +192,105 @@ export const AdminPanel: React.FC = () => {
   );
 
   const renderAnnouncements = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Announcements</h3>
-        <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
-          <Megaphone className="h-4 w-4" />
-          <span>Create Announcement</span>
-        </button>
-      </div>
-
-      <div className="bg-white p-6 border border-gray-200 rounded-lg">
-        <h4 className="font-medium text-gray-900 mb-4">Create New Announcement</h4>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter announcement title"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
-            <textarea
-              rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter announcement message"
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="general">General</option>
-                <option value="urgent">Urgent</option>
-                <option value="event">Event</option>
-                <option value="exam">Exam</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Target Audience</label>
-              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="all">All Users</option>
-                <option value="students">Students Only</option>
-                <option value="teachers">Teachers Only</option>
-                <option value="admins">Admins Only</option>
-              </select>
-            </div>
-          </div>
-          <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
-            Send Announcement
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold text-gray-900">Create Announcement</h3>
+      <p className="text-sm text-gray-500 mt-0.5">Send a notification to all users.</p>
+      
+      <form onSubmit={handleCreateAnnouncement} className="bg-white p-6 border border-gray-200 rounded-xl space-y-4 shadow-sm">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+          <input
+            type="text"
+            value={announcementTitle}
+            onChange={(e) => setAnnouncementTitle(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+            placeholder="e.g., Scheduled Maintenance"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+          <textarea
+            value={announcementBody}
+            onChange={(e) => setAnnouncementBody(e.target.value)}
+            rows={4}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors resize-none"
+            placeholder="Write your announcement here..."
+            required
+          />
+        </div>
+        <div className="pt-2 flex justify-end">
+          <button
+            type="submit"
+            disabled={isSubmittingAnnouncement || !announcementTitle.trim() || !announcementBody.trim()}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isSubmittingAnnouncement ? (
+              <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending...</>
+            ) : (
+              <><Megaphone className="h-4 w-4" /> Send Announcement</>
+            )}
           </button>
         </div>
-      </div>
-
-      <div className="space-y-4">
-        <h4 className="font-medium text-gray-900">Recent Announcements</h4>
-        <div className="space-y-3">
-          <div className="bg-white p-4 border border-gray-200 rounded-lg">
-            <div className="flex items-start justify-between">
-              <div>
-                <h5 className="font-medium text-gray-900">Semester Exam Schedule</h5>
-                <p className="text-sm text-gray-600 mt-1">The final exam schedule has been released. Please check your individual timetables.</p>
-                <p className="text-xs text-gray-500 mt-2">Sent to: All Students • 2 hours ago</p>
-              </div>
-              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">Urgent</span>
-            </div>
-          </div>
-          <div className="bg-white p-4 border border-gray-200 rounded-lg">
-            <div className="flex items-start justify-between">
-              <div>
-                <h5 className="font-medium text-gray-900">System Maintenance</h5>
-                <p className="text-sm text-gray-600 mt-1">Scheduled maintenance on Sunday from 2 AM to 6 AM. System will be unavailable.</p>
-                <p className="text-xs text-gray-500 mt-2">Sent to: All Users • 1 day ago</p>
-              </div>
-              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">General</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      </form>
     </div>
   );
 
   const renderSystemSettings = () => (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <h3 className="text-lg font-semibold text-gray-900">System Settings</h3>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 border border-gray-200 rounded-lg">
-          <h4 className="font-medium text-gray-900 mb-4">General Settings</h4>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">College Name</label>
-              <input
-                type="text"
-                defaultValue="SNS College of Technology"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Academic Year</label>
-              <input
-                type="text"
-                defaultValue="2024-2025"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Default Language</label>
-              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="ta">Tamil</option>
-                <option value="te">Telugu</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 border border-gray-200 rounded-lg">
-          <h4 className="font-medium text-gray-900 mb-4">AI Assistant Settings</h4>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Enable AI Chat</span>
-              <button className="relative inline-flex h-6 w-11 items-center rounded-full bg-blue-600 transition-colors">
-                <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform translate-x-6"></span>
-              </button>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Multi-language Support</span>
-              <button className="relative inline-flex h-6 w-11 items-center rounded-full bg-blue-600 transition-colors">
-                <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform translate-x-6"></span>
-              </button>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Voice Recognition</span>
-              <button className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors">
-                <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform translate-x-1"></span>
-              </button>
-            </div>
-          </div>
-        </div>
+      <div className="bg-white p-10 border border-gray-200 rounded-xl text-center">
+        <div className="text-5xl mb-4">⚙️</div>
+        <h3 className="text-base font-medium text-gray-900 mb-1">Feature Coming Soon</h3>
+        <p className="text-sm text-gray-500">This admin feature is under active development.</p>
       </div>
     </div>
   );
 
   const renderContent = () => {
     switch (activeSection) {
-      case 'users':
-        return renderUserManagement();
-      case 'announcements':
-        return renderAnnouncements();
-      case 'system':
-        return renderSystemSettings();
-      default:
-        return (
-          <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">⚙️</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Feature Coming Soon</h3>
-            <p className="text-gray-600">This admin feature is under development.</p>
-          </div>
-        );
+      case 'users': return renderUserManagement();
+      case 'announcements': return renderAnnouncements();
+      case 'system': return renderSystemSettings();
+      default: return null;
     }
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium animate-fade-in ${
+          toast.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'
+        }`}>
+          <CheckCircle2 className="h-4 w-4" />
+          {toast.msg}
+        </div>
+      )}
+
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Admin Panel</h2>
-        <p className="text-gray-600">Manage users, settings, and system configuration</p>
+        <p className="text-gray-500 text-sm mt-1">Manage users, roles and platform settings.</p>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Navigation */}
-        <div className="lg:w-64">
+        {/* Sidebar nav */}
+        <div className="lg:w-56 flex-shrink-0">
           <nav className="space-y-1">
             {adminSections.map((section) => {
               const Icon = section.icon;
               return (
                 <button
                   key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors duration-200 ${
+                  onClick={() => setActiveSection(section.id as 'users' | 'announcements' | 'system')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm transition-colors duration-200 ${
                     activeSection === section.id
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold'
+                      : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 ${
-                    activeSection === section.id ? 'text-blue-600' : 'text-gray-500'
-                  }`} />
-                  <span className="font-medium">{section.label}</span>
+                  <Icon className={`h-4 w-4 ${activeSection === section.id ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  {section.label}
                 </button>
               );
             })}
@@ -310,7 +298,7 @@ export const AdminPanel: React.FC = () => {
         </div>
 
         {/* Content */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {renderContent()}
         </div>
       </div>

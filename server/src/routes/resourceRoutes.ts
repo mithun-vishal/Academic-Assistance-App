@@ -1,4 +1,6 @@
 import { Router } from "express";
+import multer from "multer";
+import fs from "fs";
 import {
   uploadResource,
   getApprovedResources,
@@ -12,11 +14,26 @@ import { allowRoles } from "../middleware.ts/role";
 
 const router = Router();
 
-// Student → view approved
+if (!fs.existsSync("uploads")) {
+  fs.mkdirSync("uploads");
+}
+
+const storage = multer.diskStorage({
+  destination: (req: any, file: any, cb: any) => {
+    cb(null, "uploads/");
+  },
+  filename: (req: any, file: any, cb: any) => {
+    // Keep it safe
+    cb(null, `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`);
+  }
+});
+const upload = multer({ storage });
+
+// Student and Teacher → view approved
 router.get(
   "/",
   authenticate,
-  allowRoles("student"),
+  allowRoles("student", "teacher"),
   getApprovedResources
 );
 
@@ -25,6 +42,7 @@ router.post(
   "/",
   authenticate,
   allowRoles("teacher"),
+  upload.single("file"),
   uploadResource
 );
 

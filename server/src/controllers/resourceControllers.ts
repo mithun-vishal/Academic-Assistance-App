@@ -5,14 +5,20 @@ import { AuthRequest } from "../middleware.ts/auth";
 // Upload Resource (Teacher only)
 export const uploadResource = async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, subject, fileUrl } = req.body;
+    const { title, description, subject } = req.body;
+    let fileUrl = req.body.fileUrl;
+
+    if ((req as any).file) {
+      fileUrl = `http://localhost:5000/uploads/${(req as any).file.filename}`;
+    }
 
     const resource = await Resource.create({
       title,
       description,
       subject,
       fileUrl,
-      uploadedBy: req.user.id
+      uploadedBy: req.user.id,
+      status: "approved"
     });
 
     res.status(201).json(resource);

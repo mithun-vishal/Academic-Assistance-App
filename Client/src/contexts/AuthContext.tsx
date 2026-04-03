@@ -1,9 +1,14 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
 import { User } from '../types';
+
+const API_URL = 'http://localhost:5000/api/auth';
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
+  register: (userData: any) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -18,49 +23,15 @@ export const useAuth = () => {
   return context;
 };
 
-// Mock users for demo
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'Arjun Kumar',
-    email: 'arjun.student@sns.edu',
-    role: 'student',
-    department: 'Computer Science',
-    year: 3,
-    avatar: 'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=150'
-  },
-  {
-    id: '2',
-    name: 'Dr. Priya Sharma',
-    email: 'priya.teacher@sns.edu',
-    role: 'teacher',
-    department: 'Computer Science',
-    avatar: 'https://images.pexels.com/photos/1181690/pexels-photo-1181690.jpeg?auto=compress&cs=tinysrgb&w=150'
-  },
-  {
-    id: '3',
-    name: 'Admin User',
-    email: 'admin@sns.edu',
-    role: 'admin',
-    avatar: 'https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=150'
-  },
-  {
-    id: '4',
-    name: 'College Owner',
-    email: 'owner@sns.edu',
-    role: 'owner',
-    avatar: 'https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=150'
-  }
-];
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
+    // Restore session from localStorage
     const savedUser = localStorage.getItem('user');
-    if (savedUser) {
+    const savedToken = localStorage.getItem('token');
+    if (savedUser && savedToken) {
       setUser(JSON.parse(savedUser));
     }
     setIsLoading(false);
@@ -68,26 +39,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const foundUser = mockUsers.find(u => u.email === email);
-    if (foundUser) {
-      setUser(foundUser);
-      localStorage.setItem('user', JSON.stringify(foundUser));
-    } else {
-      throw new Error('Invalid credentials');
+    try {
+      const response = await axios.post(`${API_URL}/login`, { email, password });
+      const { token, user: userData } = response.data;
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+    } catch (error: unknown) {
+      const axiosError = error as {response?: {data?: {message?: string}}};
+      const message = axiosError.response?.data?.message || 'Login failed. Please try again.';
+      throw new Error(message);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
+  };
+
+  const register = async (userData: any) => {
+    setIsLoading(true);
+    try {
+      await axios.post(`${API_URL}/register`, userData);
+    } catch (error: unknown) {
+      const axiosError = error as {response?: {data?: {message?: string}}};
+      const message = axiosError.response?.data?.message || 'Registration failed. Please try again.';
+      throw new Error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

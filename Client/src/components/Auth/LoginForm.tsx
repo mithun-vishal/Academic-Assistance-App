@@ -1,39 +1,62 @@
-import React, { useState } from 'react';
-import { LogIn, Eye, EyeOff, Users, GraduationCap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LogIn, Eye, EyeOff, GraduationCap, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-export const LoginForm: React.FC = () => {
+interface LoginFormProps {
+  onSwitchToRegister?: () => void;
+}
+
+export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
   const { login, isLoading } = useAuth();
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  const demoUsers = [
-    { email: 'arjun.student@sns.edu', role: 'Student', name: 'Arjun Kumar' },
-    { email: 'priya.teacher@sns.edu', role: 'Teacher', name: 'Dr. Priya Sharma' },
-    { email: 'admin@sns.edu', role: 'Admin', name: 'Admin User' },
-    //{ email: 'owner@sns.edu', role: 'Owner', name: 'College Owner' }
-  ];
+  // Captcha State
+  const [captchaQ, setCaptchaQ] = useState({ text: '', answer: 0 });
+  const [userCaptchaAnswer, setUserCaptchaAnswer] = useState('');
+
+  const generateCaptcha = () => {
+    const a = Math.floor(Math.random() * 15) + 1;
+    const b = Math.floor(Math.random() * 15) + 1;
+    setCaptchaQ({ text: `${a} + ${b}`, answer: a + b });
+    setUserCaptchaAnswer('');
+  };
+
+  useEffect(() => {
+    generateCaptcha();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
+    // Pre-flight Captcha validation
+    if (parseInt(userCaptchaAnswer) !== captchaQ.answer) {
+      setError('Captcha validation failed. Try again.');
+      generateCaptcha();
+      return;
+    }
+
     try {
       await login(email, password);
-    } catch (err) {
-      setError('Invalid credentials. Please check your email and password.');
+    } catch (err: unknown) {
+      // Backend guarantees "User not found" on 404 explicitly
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Invalid credentials. Please check your email and password.');
+      }
+      
+      // Always reset captcha on failure to prevent brute forcing
+      generateCaptcha();
     }
   };
 
-  const handleDemoLogin = (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword('demo123');
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{background: 'linear-gradient(135deg, #eef2ff 0%, #f0f9ff 50%, #ecfdf5 100%)'}}>
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
@@ -42,7 +65,7 @@ export const LoginForm: React.FC = () => {
               <GraduationCap className="h-7 w-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Smart Doubt Solver</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Edubridge</h1>
               <p className="text-sm text-gray-600">SNS College of Technology</p>
             </div>
           </div>
@@ -91,6 +114,22 @@ export const LoginForm: React.FC = () => {
               </div>
             </div>
 
+            {/* Captcha Block */}
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center space-x-4">
+              <div className="flex items-center text-gray-500">
+                <ShieldAlert className="w-5 h-5 mr-2" />
+                <span className="font-semibold">{captchaQ.text} = </span>
+              </div>
+              <input 
+                type="number"
+                value={userCaptchaAnswer}
+                onChange={(e) => setUserCaptchaAnswer(e.target.value)}
+                className="w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                placeholder="Captcha answer"
+                required
+              />
+            </div>
+
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-600">{error}</p>
@@ -113,36 +152,25 @@ export const LoginForm: React.FC = () => {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-600 mb-3 text-center">Quick Demo Access</p>
-            <div className="space-y-2">
-              {demoUsers.map((user) => (
+          {onSwitchToRegister && (
+            <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+              <p className="text-sm text-gray-600">
+                Don't have an account?{' '}
                 <button
-                  key={user.email}
-                  onClick={() => handleDemoLogin(user.email)}
-                  className="w-full flex items-center justify-between p-2 text-sm text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={onSwitchToRegister}
+                  className="text-blue-600 font-medium hover:underline"
                 >
-                  <div className="flex items-center space-x-2">
-                    <Users className="h-4 w-4 text-gray-400" />
-                    <span>{user.name}</span>
-                  </div>
-                  <span className="text-xs text-gray-500">{user.role}</span>
+                  Create Account
                 </button>
-              ))}
+              </p>
             </div>
-          </div>
+          )}
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500">
-              Protected by enterprise-grade security
-            </p>
-          </div>
         </div>
 
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-500">
-          <p>© 2025 SNS College of Technology. All rights reserved.</p>
-          <p className="mt-1">Powered by Smart Doubt Solver AI</p>
+          <p>© 2026 SNS College of Technology. All rights reserved.</p>
         </div>
       </div>
     </div>

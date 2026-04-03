@@ -1,138 +1,271 @@
-import React, { useEffect, useState } from 'react';
-import { Resource } from '../../types';
-import { fetchResources } from '../../api/resourceApi';
-import { Search, Filter, Download, Eye, Tag, Upload } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
-import { format } from 'date-fns';
-import axios from 'axios';
-import axiosInstance from '../../Axios/axiosInstance';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import { Plus, Download, Loader2, Bot } from "lucide-react";
+import { fetchResources, createResource } from "../../api/resourceApi";
 
-export const ResourceHub: React.FC = () => {
+interface Resource {
+  _id: string;
+  title: string;
+  description: string;
+  subject: string;
+  fileUrl: string;
+  uploadedBy: { name: string; email: string } | string;
+  status: string;
+  createdAt: string;
+}
+
+interface Props {
+  setActiveTab?: (tab: string) => void;
+  initialShowForm?: boolean;
+}
+
+export const ResourceHub: React.FC<Props> = ({ setActiveTab, initialShowForm = false }) => {
   const { user } = useAuth();
+
   const [resources, setResources] = useState<Resource[]>([]);
+  const [showForm, setShowForm] = useState(initialShowForm);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('all');
-  const [selectedType, setSelectedType] = useState('all');
+  const [error, setError] = useState("");
+
+  const [uploadType, setUploadType] = useState<"file" | "link">("file");
+  const [file, setFile] = useState<File | null>(null);
+
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    subject: "",
+    fileUrl: "",
+  });
+
+  // Fetch resources from backend
+  const loadResources = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await fetchResources();
+      setResources(data);
+    } catch {
+      // If the API fails (e.g. not running), show a message
+      setError("Could not load resources. Make sure the server is running.");
+      setResources([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadResources = async () => {
-      setLoading(true); // Ensure loading state is set at start
-      setError('');     // Reset error before fetching
-      try {
-        const data = await fetchResources();
-        setResources(data);
-      } catch (err) {
-        console.error(err);
-        setError('Failed to load resources.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadResources();
   }, []);
 
-  // Filter resources by search term, subject, and type
-  const filteredResources = resources.filter(r => {
-    const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSubject = selectedSubject === 'all' || r.subject === selectedSubject;
-    const matchesType = selectedType === 'all' || r.type === selectedType;
-    return matchesSearch && matchesSubject && matchesType;
-  });
+  const handleAddResource = async () => {
+    if (!formData.title.trim() || !formData.subject.trim()) return;
+    if (uploadType === "link" && !formData.fileUrl?.trim()) return;
+    if (uploadType === "file" && !file) return;
 
-  if (loading) return <p>Loading resources...</p>;
-  if (error) return <p className="text-red-600">{error}</p>;
+    try {
+      if (uploadType === "file" && file) {
+        const data = new FormData();
+        data.append("title", formData.title);
+        data.append("description", formData.description);
+        data.append("subject", formData.subject);
+        data.append("file", file);
+        await createResource(data as any);
+      } else {
+        await createResource({
+          title: formData.title,
+          description: formData.description,
+          subject: formData.subject,
+          fileUrl: formData.fileUrl,
+        });
+      }
 
-  // Collect unique subjects and types for filter dropdowns
-  const subjects = Array.from(new Set(resources.map(r => r.subject)));
-  const types = Array.from(new Set(resources.map(r => r.type)));
+      setFormData({ title: "", description: "", subject: "", fileUrl: "" });
+      setFile(null);
+      setShowForm(false);
+
+      // Reload resources
+      loadResources();
+    } catch (err: unknown) {
+      const error = err as {response?: {data?: {message?: string}}};
+      setError(error.response?.data?.message || "Failed to upload resource.");
+    }
+  };
+
+  const getUploaderName = (uploadedBy: Resource["uploadedBy"]): string => {
+    if (typeof uploadedBy === "object" && uploadedBy !== null) {
+      return uploadedBy.name;
+    }
+    return "Unknown";
+  };
 
   return (
-    <div className="p-4">
-      <h2 className="text-xl font-semibold mb-4">Resources</h2>
-      <div className="flex gap-4 mb-4 items-center">
-        <div className="flex items-center gap-2">
-          <Search size={18} />
-          <input
-            type="text"
-            placeholder="Search resources..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="border rounded px-2 py-1"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Tag size={18} />
-          <select
-            value={selectedSubject}
-            onChange={e => setSelectedSubject(e.target.value)}
-            className="border rounded px-2 py-1"
+    <div className="p-8 bg-gray-50 min-h-screen">
+
+      {/* Header */}
+      <div className="flex justify-between items-center mb-8">
+        <h2 className="text-3xl font-bold text-blue-600">
+          📚 Resource Hub
+        </h2>
+
+        {user?.role === "teacher" && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
           >
-            <option value="all">All Subjects</option>
-            {subjects.map(subject => (
-              <option key={subject} value={subject}>{subject}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter size={18} />
-          <select
-            value={selectedType}
-            onChange={e => setSelectedType(e.target.value)}
-            className="border rounded px-2 py-1"
-          >
-            <option value="all">All Types</option>
-            {types.map(type => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-        </div>
-        {user?.role === 'teacher' && (
-          <button className="flex items-center gap-2 text-blue-600">
-            <Upload size={18} />
-            Upload Resource
+            <Plus className="mr-2" size={18} />
+            Add Resource
           </button>
         )}
       </div>
-      {filteredResources.length === 0 ? (
-        <p>No resources available.</p>
+
+      {/* Error Message */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg mb-6">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* Upload Form */}
+      {showForm && user?.role === "teacher" && (
+        <div className="bg-white p-6 rounded-xl shadow mb-8 space-y-4">
+          
+          <div className="flex space-x-4 mb-4">
+            <button
+              onClick={() => setUploadType("file")}
+              className={`px-4 py-2 rounded font-medium ${uploadType === "file" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+            >
+              Upload Document (PDF/DOC)
+            </button>
+            <button
+              onClick={() => setUploadType("link")}
+              className={`px-4 py-2 rounded font-medium ${uploadType === "link" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+            >
+              YouTube / Web Link
+            </button>
+          </div>
+
+          <input
+            placeholder="Title"
+            value={formData.title}
+            onChange={e =>
+              setFormData({ ...formData, title: e.target.value })
+            }
+            className="w-full border p-3 rounded"
+          />
+
+          <input
+            placeholder="Subject"
+            value={formData.subject}
+            onChange={e =>
+              setFormData({ ...formData, subject: e.target.value })
+            }
+            className="w-full border p-3 rounded"
+          />
+
+          {uploadType === "link" ? (
+            <input
+              placeholder="Resource Link / YouTube URL"
+              value={formData.fileUrl}
+              onChange={e =>
+                setFormData({ ...formData, fileUrl: e.target.value })
+              }
+              className="w-full border p-3 rounded"
+            />
+          ) : (
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
+              className="w-full border p-3 rounded bg-white"
+            />
+          )}
+
+          <textarea
+            placeholder="Description"
+            value={formData.description}
+            onChange={e =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+            className="w-full border p-3 rounded"
+          />
+
+          <button
+            onClick={handleAddResource}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+          >
+            Upload Resource
+          </button>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading ? (
+        <div className="flex justify-center items-center mt-16">
+          <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+          <span className="ml-3 text-gray-600">Loading resources...</span>
+        </div>
+      ) : resources.length === 0 ? (
+        <div className="text-center text-gray-500 mt-16">
+          No resources available yet.
+        </div>
       ) : (
-        <ul className="space-y-3">
-          {filteredResources.map(r => (
-            <li key={r.id} className="border p-3 rounded-lg">
-              <h3 className="font-bold">{r.title}</h3>
-              <p>{r.description}</p>
-              <div className="flex gap-2 items-center mt-2">
-                <a href={r.url} target="_blank" rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline flex items-center gap-1">
-                  <Eye size={16} /> View
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {resources.map(resource => (
+            <div
+              key={resource._id}
+              className="bg-white p-6 rounded-xl shadow hover:shadow-lg transition"
+            >
+              <h3 className="text-lg font-semibold">
+                {resource.title}
+              </h3>
+
+              <p className="text-sm text-blue-500 mt-1">
+                {resource.subject}
+              </p>
+
+              <p className="text-gray-600 mt-3 text-sm">
+                {resource.description}
+              </p>
+
+              <div className="flex justify-between items-center mt-6">
+                <a
+                  href={resource.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center text-blue-600 hover:underline"
+                >
+                  <Download size={16} className="mr-1" />
+                  Open
                 </a>
-                {user?.role === 'student' && r.url && (
-                  <a href={r.url} download className="text-green-600 hover:underline flex items-center gap-1">
-                    <Download size={16} /> Download
-                  </a>
-                )}
-                <span className="text-xs text-gray-500 ml-auto">
-                  {r.uploadedAt && format(new Date(r.uploadedAt), 'PPP')}
+
+                <button
+                  onClick={() => {
+                    localStorage.setItem('aiContext', JSON.stringify({ title: resource.title, fileUrl: resource.fileUrl }));
+                    if (setActiveTab) setActiveTab('chat');
+                  }}
+                  className="flex items-center text-purple-600 hover:underline ml-4"
+                >
+                  <Bot size={16} className="mr-1" />
+                  Ask in AI
+                </button>
+
+                <span className={`px-2 py-1 text-xs rounded-full ${resource.status === "approved"
+                    ? "bg-green-100 text-green-800"
+                    : resource.status === "pending"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-red-100 text-red-800"
+                  }`}>
+                  {resource.status}
                 </span>
               </div>
-            </li>
+
+              <p className="text-xs text-gray-400 mt-3">
+                Uploaded by {getUploaderName(resource.uploadedBy)}
+              </p>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
 };
-
-// const token = localStorage.getItem("token");
-
-// await axios.get("http://localhost:5000/api/resources", {
-//   headers: {
-//     Authorization: `Bearer ${token}`,
-//   },
-// });
-
-// axiosInstance.get("/resources");
